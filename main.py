@@ -6,8 +6,9 @@ def main():
     hero = "hero"
     try:
         with open(file_name, 'r') as file:
-            code = file.read()
+            code = file.read()  
             interpreter.interpret(code)
+            print(hero)
     except FileNotFoundError:
         print("File not found.")    
 
