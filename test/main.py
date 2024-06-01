@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import filedialog, Text, ttk
+from tkinter import filedialog, Text, ttk, scrolledtext
 from Interpreter import Interpreter
+import pdb
 
 class MyIDE(tk.Tk):
     def __init__(self):
@@ -20,12 +21,13 @@ class MyIDE(tk.Tk):
         self.text_tab = ttk.Frame(self.tab_control)
         self.run_tab = ttk.Frame(self.tab_control)
         self.tab_control.add(self.text_tab, text="Untitled")
-        self.tab_control.add(self.run_tab, text="Run")
 
         self.text_area.pack(expand=1, fill="both")
 
         self.run_button = ttk.Button(self.run_tab, text="Run", command=self.run_code)
         self.run_button.pack()
+
+        self.tab_control.add(self.run_tab, text="Run")
 
         self.tab_control.pack(expand=1, fill="both")
 
@@ -45,11 +47,16 @@ class MyIDE(tk.Tk):
 
     def run_code(self):
         code = self.text_area.get("1.0", "end-1c")
+        print("Running code...")
 
         try:
-            self.interpreter.interpret(code)
+            output = self.interpreter.interpret(code)
+            if output is not None:
+                print(output)
+            else:
+                print()
         except Exception as e:
-            print(f"Error: {e}")
+            print("Error: ", str(e))
 
 def main():
     app = MyIDE()
