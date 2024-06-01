@@ -3,7 +3,7 @@ from Interpreter import Interpreter
 def main():
     interpreter = Interpreter()
     file_name = "hero.GRAH"
-
+    hero = "hero"
     try:
         with open(file_name, 'r') as file:
             code = file.read()
