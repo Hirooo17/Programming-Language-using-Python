@@ -1,123 +1,92 @@
+import re
+import ast
+
+class SyntaxRule:
+    def __init__(self, pattern, match_group):
+        self.pattern = pattern
+        self.match_group = match_group
+
 class Interpreter:
     def __init__(self):
-        self.variables = {}  # Dictionary to store variable assignments
-        self.undefined_variables = set()  # Set to track undefined variables
+        self.variables = {}
+        self.syntax_rules = []
+        self.read_rules_from_file("syntax_bank.txt")
+        self.syntax = re.compile("|".join([rule.pattern for rule in self.syntax_rules]))
+        print("Syntax rules loaded:", self.syntax_rules)
 
-    def interpret(self, program):
-        # Split the program into lines and execute each line
-        lines = program.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line:  # Skip empty lines
-                if not line.endswith('.'):
-                    print("Syntax Error: Statements must end with a period.")
-                    return
-                self.execute(line[:-1].strip())  # Remove the trailing period before executing
+    def read_rules_from_file(self, filename):
+        with open(filename, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    pattern, match_group = self.parse_syntax_rule(line)
+                    self.syntax_rules.append(SyntaxRule(pattern, match_group))
 
-    def execute(self, statement):
-        # Split the statement into tokens
-        tokens = statement.split()
+    def parse_syntax_rule(self, line):
+        parts = line.split()
+        match_group = parts[0]
+        pattern = " ".join(parts[1:])
+        pattern = r"\b" + pattern + r"\b"
+        return pattern, match_group
 
-        # Check if it's a variable declaration statement with "grah" keyword
-        if tokens[0] == "grah":
-            if len(tokens) < 4 or tokens[2] != "=":  # Check for correct syntax
-                print("Syntax Error: Invalid variable declaration.")
-                return
-            var_name = tokens[1]  # Get the variable name
-            expr = " ".join(tokens[3:])  # Get the expression to evaluate
-            value = self.evaluate_expression(expr.split())
-            self.variables[var_name] = value
-            self.undefined_variables.discard(var_name)
-        # Check if it's a print statement
-        elif tokens[0] == "display-":
-            # Evaluate the expression and print the result
-            expr_tokens = tokens[1:]
-            value = self.evaluate_expression(expr_tokens)
-            if value is not None:  # Add a check to ensure value is not None
-                print(value)
-            
-        # Check if it's a variable assignment statement
-        elif len(tokens) >= 3 and tokens[1] == "=":  # Adjust condition to check for assignment
-            # Extract variable name and expression
-            var_name = tokens[0]
-            # Check if the variable is declared before
-            if var_name not in self.variables:
-                print(f"Error: Variable '{var_name}' is used before being declared with 'grah'.")
-                return
-            expr = " ".join(tokens[2:])
-            # Evaluate the expression and assign the value to the variable
-            value = self.evaluate_expression(expr.split())
-            self.variables[var_name] = value
-        else: 
-            print("Syntax Error: Unknown statement.")    
+    def tokenize(self, code):
+        token_pattern = r'\b(?:grah|display|int|string|\d+|[a-zA-Z_]\w*|[+\-*/=]|"[^"]*"|\.)\b'
+        tokens = re.findall(token_pattern, code)
+        return tokens
 
-    def evaluate_expression(self, tokens):
-        # Stack to hold intermediate results
-        stack = []
+    def interpret(self, code, output_func):
+        code_lines = code.strip().split("\n")
+        print("Interpreting code:")
+        for line in code_lines:
+            print(f"Processing line: {line}")
+            if line:
+                tokens = self.tokenize(line)
+                print(f"Tokens: {tokens}")
+                if tokens and tokens[0] != 'grah' and tokens[0] != 'display':
+                    output_func(f"Syntax error: line '{line}' must start with 'grah' or 'display'\n")
+                    continue
 
-        # Operator precedence
-        precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
+                if tokens[0] == 'grah':
+                    self.handle_assignment(tokens, output_func)
+                elif tokens[0] == 'display':
+                    self.handle_print(tokens, output_func)
+                else:
+                    output_func(f"Unknown command: '{line}'\n")
 
-        # Function to apply an operator to two operands
-        def apply_operator(operators, values):
-            operator = operators.pop()
-            right = values.pop()
-            left = values.pop()
-            if operator == '+':
-                values.append(left + right)
-            elif operator == '-':
-                values.append(left - right)
-            elif operator == '*':
-                values.append(left * right)
-            elif operator == '/':
-                if right == 0:
-                    print("Error: Division by zero.")
-                    return None
-                values.append(left / right)
+    def handle_assignment(self, tokens, output_func):
+        print(f"Handling assignment: {tokens}")
+        if len(tokens) < 5 or tokens[2] != '=':
+            output_func(f"Syntax error in assignment: {' '.join(tokens)}\n")
+            return
 
-        # Shunting-yard algorithm to parse and evaluate the expression
-        operators = []
-        values = []
+        variable_name = tokens[1]
+        if tokens[3] == 'int':
+            value = int(tokens[4])
+        elif tokens[3] == 'String':
+            value = tokens[4][1:-1]
+        else:
+            output_func(f"Invalid data type: {tokens[3]}\n")
+            return
 
-        i = 0
-        while i < len(tokens):
-            token = tokens[i]
+        if variable_name in self.variables:
+            self.variables[variable_name] = value
+        else:
+            self.variables[variable_name] = {tokens[3]: value}
 
-            if token.isdigit():
-                values.append(int(token))
-            elif token.startswith('"') and token.endswith('"'):
-                values.append(token.strip('"'))
-            elif token in self.variables:
-                values.append(self.variables[token])
-            elif token in precedence:
-                while (operators and operators[-1] in precedence and
-                       precedence[operators[-1]] >= precedence[token]):
-                    apply_operator(operators, values)
-                operators.append(token)
-            else:
-                print(f"Syntax Error: Unrecognized token '{token}'.")
-                print(f"Syntax Error: add spaces '{token}'.")
-                return None
-            i += 1
+        output_func(f"Variable '{variable_name}' = {value}\n")
 
-        while operators:
-            apply_operator(operators, values)
+    def handle_print(self, tokens, output_func):
+        print(f"Handling print: {tokens}")
+        expression = " ".join(tokens[1:])  # Skip the 'display' token
+        value = self.evaluate_expression(expression)
+        if value is not None:
+            output_func(str(value) + "\n")
 
-        if len(values) != 1:
-            print("Error: Invalid expression.")
-            return None
-        return values[0]
-
-def main():
-    interpreter = Interpreter()
-    file_name = "agams.GRAH"
-
-    try:
-        with open(file_name, 'r') as file:
-            code = file.read()
-            interpreter.interpret(code)
-    except FileNotFoundError:
-        print("File not found.")
-
-if __name__ == "__main__":
-    main()
+    def evaluate_expression(self, expr):
+        print(f"Evaluating expression: {expr}")
+        try:
+            tree = ast.parse(expr, mode='eval')
+            value = eval(compile(tree, "<string>", "eval"), {}, self.variables)
+        except Exception as e:
+            return f"Error: {e}"
+        return value

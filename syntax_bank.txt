@@ -1,0 +1,8 @@
+DataTypes int
+DataTypes String
+Keyword hero
+Keyword greet
+Keyword bye
+Keyword grah
+Print display
+End \.

@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, Text, ttk, scrolledtext
 from Interpreter import Interpreter
-import pdb
 
 class MyIDE(tk.Tk):
     def __init__(self):
@@ -27,9 +26,12 @@ class MyIDE(tk.Tk):
         self.run_button = ttk.Button(self.run_tab, text="Run", command=self.run_code)
         self.run_button.pack()
 
+        self.output_area = scrolledtext.ScrolledText(self.run_tab, wrap=tk.WORD, height=10)
+        self.output_area.pack(expand=1, fill="both")
+
         self.tab_control.add(self.run_tab, text="Run")
 
-        self.tab_control.pack(expand=1, fill="both")
+        self.tab_control.pack(expand=1, fill="both")    
 
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("GRAH files", "*.GRAH")])
@@ -47,16 +49,17 @@ class MyIDE(tk.Tk):
 
     def run_code(self):
         code = self.text_area.get("1.0", "end-1c")
+        self.output_area.delete("1.0", tk.END)  # Clear previous output
         print("Running code...")
 
+        def output_func(output):
+            print(f"Output: {output}")
+            self.output_area.insert(tk.END, output)
+
         try:
-            output = self.interpreter.interpret(code)
-            if output is not None:
-                print(output)
-            else:
-                print()
+            self.interpreter.interpret(code, output_func)
         except Exception as e:
-            print("Error: ", str(e))
+            self.output_area.insert(tk.END, "Error: " + str(e))
 
 def main():
     app = MyIDE()

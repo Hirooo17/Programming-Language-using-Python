@@ -1,3 +1,4 @@
-grah ysa = 5 + 5.
-grah x = 1.
-display- ysa + x.
+grah int y = 5 + 5 .
+grah x = 1 .
+grah string = "hi" .
+display y + x .
