@@ -24,7 +24,7 @@ class IDE:
         tokenizer = Tokenizer('syntax.txt')
         tokens = tokenizer.tokenize(code)
         
-        interpreter = Interpreter(tokens, tokenizer.syntax_rules)
+        interpreter = Interpreter(tokens, 'syntax.txt')
         
         # Redirect print to output console
         self.output.config(state='normal')

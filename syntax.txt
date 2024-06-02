@@ -1,5 +1,5 @@
 KEYWORDS:
-print
+display
 if
 else
 while
@@ -25,5 +25,5 @@ else:
     <statements>
 while <condition>:
     <statements>
-print(<expression>)
+printy(<expression>)
 end
