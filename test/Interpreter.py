@@ -1,92 +1,157 @@
 import re
-import ast
 
 class SyntaxRule:
     def __init__(self, pattern, match_group):
         self.pattern = pattern
         self.match_group = match_group
 
-class Interpreter:
+class Lexer:
     def __init__(self):
-        self.variables = {}
-        self.syntax_rules = []
+        self.token_specification = []
         self.read_rules_from_file("syntax_bank.txt")
-        self.syntax = re.compile("|".join([rule.pattern for rule in self.syntax_rules]))
-        print("Syntax rules loaded:", self.syntax_rules)
+        self.token_re = re.compile('|'.join('(?P<%s>%s)' % pair for pair in self.token_specification))
 
     def read_rules_from_file(self, filename):
         with open(filename, 'r') as file:
             for line in file:
                 line = line.strip()
                 if line:
-                    pattern, match_group = self.parse_syntax_rule(line)
-                    self.syntax_rules.append(SyntaxRule(pattern, match_group))
-
-    def parse_syntax_rule(self, line):
-        parts = line.split()
-        match_group = parts[0]
-        pattern = " ".join(parts[1:])
-        pattern = r"\b" + pattern + r"\b"
-        return pattern, match_group
+                    parts = line.split()
+                    match_group = parts[0]
+                    pattern = " ".join(parts[1:])
+                    self.token_specification.append((match_group, pattern))
 
     def tokenize(self, code):
-        token_pattern = r'\b(?:grah|display|int|string|\d+|[a-zA-Z_]\w*|[+\-*/=]|"[^"]*"|\.)\b'
-        tokens = re.findall(token_pattern, code)
+        tokens = []
+        for mo in self.token_re.finditer(code):
+            kind = mo.lastgroup
+            value = mo.group()
+            if kind == 'NUMBER':
+                value = float(value) if '.' in value else int(value)
+            elif kind == 'ID' and value in ('grah', 'display', 'int', 'string'):
+                kind = value.upper()
+            elif kind == 'SKIP':
+                continue
+            elif kind == 'MISMATCH':
+                raise RuntimeError(f'{value!r} unexpected')
+            tokens.append(Token(kind, value))
         return tokens
 
-    def interpret(self, code, output_func):
-        code_lines = code.strip().split("\n")
-        print("Interpreting code:")
-        for line in code_lines:
-            print(f"Processing line: {line}")
-            if line:
-                tokens = self.tokenize(line)
-                print(f"Tokens: {tokens}")
-                if tokens and tokens[0] != 'grah' and tokens[0] != 'display':
-                    output_func(f"Syntax error: line '{line}' must start with 'grah' or 'display'\n")
-                    continue
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.pos = 0
 
-                if tokens[0] == 'grah':
-                    self.handle_assignment(tokens, output_func)
-                elif tokens[0] == 'display':
-                    self.handle_print(tokens, output_func)
-                else:
-                    output_func(f"Unknown command: '{line}'\n")
+    def parse(self):
+        statements = []
+        while self.pos < len(self.tokens):
+            stmt = self.statement()
+            if stmt:
+                statements.append(stmt)
+        return statements
 
-    def handle_assignment(self, tokens, output_func):
-        print(f"Handling assignment: {tokens}")
-        if len(tokens) < 5 or tokens[2] != '=':
-            output_func(f"Syntax error in assignment: {' '.join(tokens)}\n")
-            return
-
-        variable_name = tokens[1]
-        if tokens[3] == 'int':
-            value = int(tokens[4])
-        elif tokens[3] == 'String':
-            value = tokens[4][1:-1]
+    def statement(self):
+        if self.match('GRAH'):
+            return self.assignment()
+        elif self.match('DISPLAY'):
+            return self.print_statement()
         else:
-            output_func(f"Invalid data type: {tokens[3]}\n")
-            return
+            raise SyntaxError(f'Unexpected token: {self.peek().value}')
 
-        if variable_name in self.variables:
-            self.variables[variable_name] = value
+    def assignment(self):
+        self.consume('GRAH')
+        dtype = self.consume('INT', 'STRING').type.lower()
+        var_name = self.consume('ID').value
+        self.consume('ASSIGN')
+        expr = self.expression()
+        self.consume('END')
+        return ('assign', dtype, var_name, expr)
+
+    def print_statement(self):
+        self.consume('DISPLAY')
+        expr = self.expression()
+        self.consume('END')
+        return ('print', expr)
+
+    def expression(self):
+        terms = [self.term()]
+        while self.match('OP'):
+            op = self.consume('OP').value
+            term = self.term()
+            terms.append((op, term))
+        if len(terms) == 1:
+            return terms[0]
+        return terms
+
+    def term(self):
+        if self.match('NUMBER'):
+            return ('number', self.consume('NUMBER').value)
+        elif self.match('STRING'):
+            return ('string', self.consume('STRING').value.strip('"'))
+        elif self.match('ID'):
+            return ('variable', self.consume('ID').value)
         else:
-            self.variables[variable_name] = {tokens[3]: value}
+            raise SyntaxError(f'Unexpected token: {self.peek().value}')
 
-        output_func(f"Variable '{variable_name}' = {value}\n")
+    def match(self, *token_types):
+        if self.pos < len(self.tokens):
+            return self.tokens[self.pos].type in token_types
+        return False
 
-    def handle_print(self, tokens, output_func):
-        print(f"Handling print: {tokens}")
-        expression = " ".join(tokens[1:])  # Skip the 'display' token
-        value = self.evaluate_expression(expression)
-        if value is not None:
-            output_func(str(value) + "\n")
+    def consume(self, *token_types):
+        if self.match(*token_types):
+            token = self.tokens[self.pos]
+            self.pos += 1
+            return token
+        raise SyntaxError(f'Expected {token_types}, got {self.peek().type}')
 
-    def evaluate_expression(self, expr):
-        print(f"Evaluating expression: {expr}")
-        try:
-            tree = ast.parse(expr, mode='eval')
-            value = eval(compile(tree, "<string>", "eval"), {}, self.variables)
-        except Exception as e:
-            return f"Error: {e}"
-        return value
+    def peek(self):
+        return self.tokens[self.pos]
+
+class Interpreter:
+    def __init__(self):
+        self.variables = {}
+
+    def execute(self, statements):
+        for stmt in statements:
+            if stmt[0] == 'assign':
+                self.execute_assignment(stmt)
+            elif stmt[0] == 'print':
+                self.execute_print(stmt)
+
+    def execute_assignment(self, stmt):
+        _, dtype, var_name, expr = stmt
+        value = self.evaluate(expr)
+        self.variables[var_name] = value
+
+    def execute_print(self, stmt):
+        _, expr = stmt
+        value = self.evaluate(expr)
+        print(value)
+
+    def evaluate(self, expr):
+        if isinstance(expr, tuple):
+            if expr[0] == 'number':
+                return expr[1]
+            elif expr[0] == 'string':
+                return expr[1]
+            elif expr[0] == 'variable':
+                var_name = expr[1]
+                if var_name in self.variables:
+                    return self.variables[var_name]
+                raise NameError(f'Undefined variable: {var_name}')
+            elif isinstance(expr, list):
+                result = self.evaluate(expr[0])
+                for op, term in expr[1:]:
+                    right = self.evaluate(term)
+                    if op == '+':
+                        result += right
+                    elif op == '-':
+                        result -= right
+                    elif op == '*':
+                        result *= right
+                    elif op == '/':
+                        result /= right
+                return result
+        else:
+            raise TypeError(f'Invalid expression: {expr}')

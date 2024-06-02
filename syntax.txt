@@ -1,0 +1,29 @@
+KEYWORDS:
+print
+if
+else
+while
+end
+
+OPERATORS:
++
+-
+*
+/
+=
+==
+!=
+<
+>
+<=
+>=
+
+SYNTAX:
+if <condition>:
+    <statements>
+else:
+    <statements>
+while <condition>:
+    <statements>
+print(<expression>)
+end
